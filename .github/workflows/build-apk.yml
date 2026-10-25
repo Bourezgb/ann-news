@@ -52,7 +52,7 @@ jobs:
 
       # ملف APK ثابت الرابط في صفحة Releases (لا يستهلك حصة تخزين Artifacts).
       - name: Publish APK to the "latest-apk" release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: latest-apk
           name: ANN – آخر نسخة
@@ -65,7 +65,7 @@ jobs:
             رقم البناء: ${{ github.run_number }}
           files: build/app/outputs/flutter-apk/ann-news.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         continue-on-error: true
         with:
           name: ann-news-apk-${{ github.run_number }}
