@@ -176,16 +176,23 @@ async function screenEditor(id) {
     const issues = proofread(text);
     if (!text.trim()) return h('p', { class: 'muted' }, 'اكتب نص الخبر ليبدأ التدقيق.');
     if (!issues.length) return h('p', { class: 'muted' }, '✔ لم يُعثر على مشكلات في التدقيق الآلي.');
+    const byCategory = {};
+    for (const issue of issues) byCategory[issue.category] = (byCategory[issue.category] || 0) + 1;
     return h(
       'div',
       {},
+      h(
+        'div',
+        { class: 'cat-summary' },
+        Object.entries(byCategory).map(([cat, n]) => h('span', { class: 'pill' }, `${cat}: ${n}`)),
+      ),
       h('p', { class: 'muted' }, `${issues.length} ملاحظة. راجعها كلها قبل النشر، والتدقيق الآلي لا يغني عن القراءة.`),
-      issues.slice(0, 60).map((issue) => {
+      issues.slice(0, 80).map((issue) => {
         const ctx = text.slice(Math.max(0, issue.index - 18), issue.index + issue.length + 18).replace(/\n/g, ' ');
         return h(
           'div',
           { class: `issue ${issue.level}` },
-          h('div', { class: 'msg' }, issue.message),
+          h('div', { class: 'msg' }, h('span', { class: 'pill' }, issue.category), ' ', issue.message),
           h('div', { class: 'ctx' }, `…${ctx}…`),
           issue.suggestion !== undefined
             ? h('div', { class: 'sug' }, `الاقتراح: «${issue.suggestion || '(حذف)'}»`)

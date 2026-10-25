@@ -216,6 +216,8 @@ input:focus, select:focus, textarea:focus {
 
 .issue { padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
 .issue .msg { font-size: 14px; }
+.cat-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.issue .msg .pill { font-size: 11px; }
 .issue .ctx { font-size: 13px; color: var(--muted); direction: rtl; margin: 4px 0; }
 .issue .sug { font-size: 13px; color: var(--ok); margin-bottom: 6px; }
 .issue.error { border-inline-start: 4px solid var(--error); }

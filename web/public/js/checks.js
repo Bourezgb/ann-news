@@ -1,27 +1,8 @@
 // فحوص النصوص المشتركة بين الخادم والمتصفح: السيو والتدقيق اللغوي وإنشاء الرابط.
+import { allRules } from './rules.js';
 
 const TASHKEEL = /[ً-ٰٟ]/g;
 const ARABIC_WORD = /[؀-ۿ]+/g;
-
-// أخطاء إملائية شائعة في الصحافة العربية: الصيغة الخاطئة ← الصحيحة.
-export const COMMON_MISTAKES = {
-  الى: 'إلى',
-  انه: 'أنه',
-  انها: 'أنها',
-  هذة: 'هذه',
-  اللذى: 'الذي',
-  الاخبار: 'الأخبار',
-  اعلن: 'أعلن',
-  اكد: 'أكد',
-  اكثر: 'أكثر',
-  ايضا: 'أيضاً',
-  امس: 'أمس',
-  مسئول: 'مسؤول',
-  لاكن: 'لكن',
-  الغاء: 'إلغاء',
-  ماتزال: 'ما تزال',
-  الاف: 'آلاف',
-};
 
 export function stripTashkeel(text) {
   return text.replace(TASHKEEL, '');
@@ -42,32 +23,25 @@ export function slugify(title) {
 }
 
 /**
- * تدقيق لغوي وترقيمي. يُرجع قائمة مشكلات بموضع كل منها في النص.
- * كل مشكلة: { level, message, index, length, suggestion? }
+ * تدقيق لغوي وترقيمي. يُرجع المشكلات مرتبةً بالموضع.
+ * كل مشكلة: { category, level, message, index, length, suggestion? }
  */
 export function proofread(text) {
   const issues = [];
-  const add = (level, message, index, length, suggestion) =>
-    issues.push({ level, message, index, length, ...(suggestion ? { suggestion } : {}) });
-
-  for (const m of text.matchAll(/[^\S\n]{2,}/g)) add('warn', 'مسافات متكررة', m.index, m[0].length, ' ');
-  for (const m of text.matchAll(/[^\S\n]+[،؛؟!.:]/g)) add('warn', 'مسافة قبل علامة الترقيم', m.index, m[0].length);
-  for (const m of text.matchAll(/[،؛][^\s«»"'\n]/g)) add('warn', 'لا توجد مسافة بعد الفاصلة', m.index, m[0].length);
-  for (const m of text.matchAll(/[!?؟]{2,}/g)) add('warn', 'علامات استفهام أو تعجب متكررة', m.index, m[0].length);
-  for (const m of text.matchAll(/"/g)) add('info', 'استعمل علامات التنصيص « »', m.index, 1, '«');
-
-  const words = [...text.matchAll(ARABIC_WORD)];
-  words.forEach((w, i) => {
-    const plain = stripTashkeel(w[0]);
-    if (COMMON_MISTAKES[plain]) {
-      add('error', `خطأ إملائي محتمل: «${plain}»`, w.index, w[0].length, COMMON_MISTAKES[plain]);
+  for (const rule of allRules()) {
+    for (const found of rule.find(text)) {
+      const { suggestion, word, ...pos } = found;
+      const message = word ? `${rule.message}: «${word}»` : rule.message;
+      issues.push({
+        category: rule.category,
+        level: rule.level,
+        message,
+        ...pos,
+        ...(suggestion !== undefined ? { suggestion } : {}),
+      });
     }
-    const next = words[i + 1];
-    if (next && stripTashkeel(next[0]) === plain && /^\s+$/.test(text.slice(w.index + w[0].length, next.index))) {
-      add('error', `كلمة مكررة: «${plain}»`, next.index, next[0].length);
-    }
-  });
-  return issues.sort((a, b) => a.index - b.index);
+  }
+  return issues.sort((a, b) => a.index - b.index || a.length - b.length);
 }
 
 /**
