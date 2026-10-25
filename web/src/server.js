@@ -5,6 +5,19 @@ import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listArticles, getArticle, createArticle, updateArticle, deleteArticle, CONSTANTS } from './store.js';
 import { extractArticle } from './extract.js';
+import { GeminiClient } from './gemini.js';
+import { publicSettings, serverSettings, updateSettings } from './settings.js';
+import { proofreadWithAI, seoWithAI, draftWithAI } from './ai.js';
+
+async function geminiClient() {
+  const s = await serverSettings();
+  // بدون مفتاح يرمي GeminiError برسالة واضحة للواجهة
+  return new GeminiClient({ apiKey: s.geminiKey, model: s.model });
+}
+
+async function ping() {
+  return (await geminiClient()).ping();
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(here, '..', 'public');
@@ -71,6 +84,23 @@ async function handleApi(req, res, path) {
 
   if (parts[1] === 'health') return send(res, 200, { ok: true });
   if (parts[1] === 'meta') return send(res, 200, CONSTANTS);
+
+  if (parts[1] === 'settings') {
+    if (method === 'GET') return send(res, 200, await publicSettings());
+    if (method === 'PUT') return send(res, 200, await updateSettings(await readJson(req)));
+    if (method === 'POST' && parts[2] === 'test') {
+      const sample = await ping();
+      return send(res, 200, { ok: true, sample });
+    }
+  }
+
+  if (parts[1] === 'ai' && method === 'POST') {
+    const input = await readJson(req);
+    const client = await geminiClient();
+    if (parts[2] === 'proofread') return send(res, 200, await proofreadWithAI(client, String(input.text || '')));
+    if (parts[2] === 'seo') return send(res, 200, await seoWithAI(client, input));
+    if (parts[2] === 'draft') return send(res, 200, await draftWithAI(client, input));
+  }
 
   if (parts[1] === 'source' && method === 'POST') {
     const { url } = await readJson(req);

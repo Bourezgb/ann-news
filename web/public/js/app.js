@@ -109,9 +109,13 @@ function field(label, control, counter = null) {
 async function screenEditor(id) {
   setNav(id ? 'home' : 'new');
   let article = id ? await api(`/api/articles/${id}`) : { ...EMPTY_ARTICLE, ...(pendingPrefill || {}) };
+  const draftNotes = pendingPrefill?.aiNotes || [];
   pendingPrefill = null;
   let saved = '';
   let activeTab = 'proof';
+  let aiIssues = null; // null: لم يُطلب بعد
+  let aiSeo = null;
+  let aiBusy = false;
 
   const inputs = {};
   const title = (inputs.title = h('input', { type: 'text', value: article.title, placeholder: 'عنوان الخبر' }));
@@ -155,6 +159,7 @@ async function screenEditor(id) {
     const c = current();
     const tabs = [
       ['proof', 'التدقيق'],
+      ['ai', 'الذكاء الاصطناعي'],
       ['seo', 'السيو'],
       ['design', 'التصميم'],
     ];
@@ -167,6 +172,7 @@ async function screenEditor(id) {
     );
     let content;
     if (activeTab === 'proof') content = proofPanel(c.body);
+    else if (activeTab === 'ai') content = aiPanel(c);
     else if (activeTab === 'seo') content = seoPanel(c);
     else content = h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'صمّم صورة السوشيال من نص هذا المقال باستخدام قوالب ANN.'), h('a', { class: 'btn primary', href: `#/design/${article.id || ''}`, onclick: (e) => { if (!article.id) { e.preventDefault(); toast('احفظ المقال أولاً ثم صمّم الصورة', true); } } }, 'فتح مصمم السوشيال'));
     side.replaceChildren(tabBar, content);
@@ -223,6 +229,103 @@ async function screenEditor(id) {
         { class: 'checks' },
         r.items.map((it) => h('li', { class: it.level }, it.text)),
       ),
+    );
+  };
+
+  // ---- الذكاء الاصطناعي (Gemini عبر الخادم) ----
+  const runProof = async () => {
+    aiBusy = true;
+    renderSide();
+    try {
+      const r = await api('/api/ai/proofread', { method: 'POST', body: { text: body.value } });
+      aiIssues = r.issues;
+    } catch (err) {
+      aiIssues = null;
+      toast(err.message, true);
+    } finally {
+      aiBusy = false;
+      renderSide();
+    }
+  };
+
+  const runSeo = async () => {
+    aiBusy = true;
+    renderSide();
+    try {
+      aiSeo = await api('/api/ai/seo', {
+        method: 'POST',
+        body: { title: title.value, body: body.value, keyword: keyword.value },
+      });
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      aiBusy = false;
+      renderSide();
+    }
+  };
+
+  const applyAiFix = (issue) => {
+    // نتأكد أن النص لم يتغير منذ الطلب قبل التطبيق
+    if (body.value.substr(issue.index, issue.length) !== issue.original) {
+      toast('تغيّر النص منذ التحليل، أعد التدقيق', true);
+      return;
+    }
+    body.value = body.value.slice(0, issue.index) + issue.suggestion + body.value.slice(issue.index + issue.length);
+    aiIssues = null;
+    refresh();
+    toast('تم تطبيق الاقتراح. أعد التدقيق لتحديث الباقي');
+  };
+
+  const aiPanel = () => {
+    const notes = draftNotes.length
+      ? h(
+          'div',
+          { class: 'card' },
+          h('strong', {}, 'ملاحظات للتحقق قبل النشر'),
+          h('ul', { class: 'checks' }, draftNotes.map((n) => h('li', { class: 'warn' }, n))),
+        )
+      : null;
+    const issues =
+      aiIssues === null
+        ? null
+        : aiIssues.length
+          ? h(
+              'div',
+              {},
+              aiIssues.map((issue) =>
+                h(
+                  'div',
+                  { class: `issue ${issue.level}` },
+                  h('div', { class: 'msg' }, h('span', { class: 'pill' }, issue.category), ' ', issue.message),
+                  h('div', { class: 'ctx' }, `«${issue.original}» ← «${issue.suggestion}»`),
+                  h('button', { class: 'btn small', onclick: () => applyAiFix(issue) }, 'تطبيق الاقتراح'),
+                ),
+              ),
+            )
+          : h('p', { class: 'muted' }, 'لم يجد الذكاء الاصطناعي أخطاء في النص.');
+    const seo = aiSeo
+      ? h(
+          'div',
+          { class: 'stack' },
+          h('strong', {}, 'عناوين مقترحة'),
+          aiSeo.titles.map((t) =>
+            h('button', { class: 'btn small', onclick: () => { title.value = t; refresh(); } }, t),
+          ),
+          h('strong', {}, 'وصف مقترح'),
+          h('p', { class: 'muted' }, aiSeo.description),
+          h('button', { class: 'btn small', onclick: () => { description.value = aiSeo.description; refresh(); } }, 'استعمل الوصف'),
+          h('div', {}, aiSeo.keywords.map((k) => h('span', { class: 'pill' }, k))),
+        )
+      : null;
+    return h(
+      'div',
+      { class: 'stack' },
+      notes,
+      h('p', { class: 'muted' }, 'يُرسل النص إلى Gemini بمفتاحك. راجع كل اقتراح قبل قبوله.'),
+      h('button', { class: 'btn primary', disabled: aiBusy, onclick: runProof }, aiBusy ? 'جارٍ التحليل…' : 'تدقيق نحوي بالذكاء الاصطناعي'),
+      issues,
+      h('button', { class: 'btn', disabled: aiBusy, onclick: runSeo }, 'اقتراح عناوين ووصف'),
+      seo,
     );
   };
 
@@ -304,7 +407,7 @@ async function screenSource() {
           data.description ? h('p', { class: 'muted' }, data.description) : null,
           data.image ? h('img', { src: data.image, alt: '', style: 'max-width:100%;border-radius:12px;max-height:260px;object-fit:cover' }) : null,
           h('div', { class: 'field' }, h('label', {}, h('span', {}, 'نص الخبر المستخرج'), h('span', { class: 'count muted' }, `${countWords(data.text)} كلمة`)), h('textarea', { rows: 12, readonly: true }, data.text || '')),
-          h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => createFrom(data) }, 'إنشاء مقال من هذا المصدر'), h('a', { class: 'btn ghost', href: data.url, target: '_blank', rel: 'noopener' }, 'فتح الأصل')),
+          h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => createFrom(data) }, 'إنشاء مقال من هذا المصدر'), h('button', { class: 'btn', onclick: () => draftFrom(data) }, 'صياغة بالذكاء الاصطناعي'), h('a', { class: 'btn ghost', href: data.url, target: '_blank', rel: 'noopener' }, 'فتح الأصل')),
         ),
       );
     } catch (err) {
@@ -318,6 +421,85 @@ async function screenSource() {
     h('div', { style: 'margin-top:16px' }, out),
   );
   urlInput.focus();
+}
+
+async function draftFrom(data) {
+  toast('جارٍ الصياغة بالذكاء الاصطناعي…');
+  try {
+    const d = await api('/api/ai/draft', {
+      method: 'POST',
+      body: { sourceText: data.text, sourceUrl: data.url, type: 'خبر' },
+    });
+    pendingPrefill = {
+      title: d.title,
+      description: d.description,
+      body: d.body,
+      source: data.url,
+      image: data.image,
+      imageAlt: d.title,
+      aiNotes: d.notes,
+    };
+    location.hash = '#/new';
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function screenSettings() {
+  setNav('settings');
+  const s = await api('/api/settings');
+  const keyInput = h('input', {
+    type: 'password',
+    dir: 'ltr',
+    autocomplete: 'off',
+    placeholder: s.hasKey ? 'اكتب مفتاحاً جديداً للتغيير' : 'الصق مفتاح Gemini هنا',
+  });
+  const modelInput = h('input', { type: 'text', dir: 'ltr', value: s.model });
+  const status = h('p', { class: 'muted' }, s.hasKey ? `مفتاح محفوظ على جهازك: ${s.keyHint}` : 'لا يوجد مفتاح بعد.');
+
+  const save = async () => {
+    const body = { model: modelInput.value };
+    if (keyInput.value.trim()) body.geminiKey = keyInput.value.trim();
+    try {
+      await api('/api/settings', { method: 'PUT', body });
+      toast('تم الحفظ');
+      screenSettings();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  const test = async () => {
+    try {
+      const r = await api('/api/settings/test', { method: 'POST' });
+      toast(`المفتاح يعمل. ردّ النموذج: ${r.sample}`);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  const clear = async () => {
+    if (!confirm('حذف مفتاح Gemini من جهازك؟')) return;
+    await api('/api/settings', { method: 'PUT', body: { geminiKey: '' } });
+    toast('تم حذف المفتاح');
+    screenSettings();
+  };
+
+  view.replaceChildren(
+    pageHead('الإعدادات', 'مفتاح Gemini يُحفظ على جهازك فقط، ولا يُرسل إلى المتصفح'),
+    h(
+      'div',
+      { class: 'card stack' },
+      field('مفتاح Gemini API', keyInput),
+      status,
+      field('النموذج', modelInput),
+      h(
+        'div',
+        { class: 'actions' },
+        h('button', { class: 'btn primary', onclick: save }, 'حفظ'),
+        h('button', { class: 'btn', onclick: test }, 'اختبار المفتاح'),
+        h('button', { class: 'btn ghost danger', onclick: clear }, 'حذف المفتاح'),
+      ),
+    ),
+  );
 }
 
 function createFrom(data) {
@@ -383,6 +565,7 @@ async function route() {
     if (parts[0] === 'source') return await screenSource();
     if (parts[0] === 'design') return await screenDesign(parts[1] || null);
     if (parts[0] === 'soon') return screenSoon();
+    if (parts[0] === 'settings') return await screenSettings();
     return await screenHome();
   } catch (err) {
     view.replaceChildren(h('div', { class: 'card', style: 'color:var(--error)' }, err.message));
