@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# web studio (Node)
+web/node_modules/
+web/data/*.json

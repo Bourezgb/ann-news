@@ -1,0 +1,12 @@
+{
+  "name": "ann-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "استوديو ANN: أدوات الصحفي المتربص من الخبر إلى التصميم",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}

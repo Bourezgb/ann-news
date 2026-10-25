@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANN Studio · استوديو الشبكة الجزائرية للأخبار</title>
+  <link rel="icon" href="assets/images/ann-logo-red.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/">
+        <img src="assets/images/ann-logo-white.png" alt="ANN">
+        <span>Studio</span>
+      </a>
+      <nav>
+        <a href="#/" data-nav="home"><span class="ico">▦</span>المقالات</a>
+        <a href="#/new" data-nav="new"><span class="ico">＋</span>مقال جديد</a>
+        <a href="#/source" data-nav="source"><span class="ico">⤓</span>جلب من مصدر</a>
+        <a href="#/design" data-nav="design"><span class="ico">◧</span>تصميم السوشيال</a>
+        <a href="#/soon" data-nav="soon"><span class="ico">▶</span>الفيديو والإنفوغراف</a>
+      </nav>
+      <div class="sidebar-foot">نسخة محلية · البيانات على جهازك</div>
+    </aside>
+
+    <main class="main" id="view"></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
